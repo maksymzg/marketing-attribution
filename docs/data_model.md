@@ -182,3 +182,52 @@ created_at: 2024-01-15 10:30:00
 - **`is_active` flag instead of DELETE** — discontinued products stay in `products` to preserve FK integrity with historical `order_items`. Soft delete pattern.
 
 ---
+## Table: `order_items`
+
+**Purpose:** Order line items — one row per product per order. Splits the "what was purchased" from the order header (`orders`).
+
+**Granularity:** 1 row = 1 product within 1 order.
+
+**Analytical questions served:**
+
+- **Q3.1** — gross profit per channel (margin = unit_price − unit_cost, summed per order, joined to channel via customers)
+- **Q3.2** — basket composition (which products appear in which customers' baskets, % revenue per category)
+
+**Columns:**
+
+| Column | Type | Constraint | Why |
+|---|---|---|---|
+| `order_id` | `INT` | `NOT NULL REFERENCES orders(id)` | FK to parent order |
+| `product_id` | `INT` | `NOT NULL REFERENCES products(id)` | FK to product |
+| `quantity` | `INT` | `NOT NULL`, `CHECK (quantity > 0)` | How many units of this product in the order |
+| `unit_price` | `NUMERIC(10, 2)` | `NOT NULL`, `CHECK (unit_price > 0)` | **Snapshotted** selling price at time of order — preserves historical accuracy if catalog price changes |
+| `unit_cost` | `NUMERIC(10, 2)` | `NOT NULL`, `CHECK (unit_cost > 0)` | **Snapshotted** cost at time of order — used for gross profit calculations |
+| `created_at` | `TIMESTAMP` | `NOT NULL DEFAULT NOW()` | Audit log |
+
+**Primary key:** `PRIMARY KEY (order_id, product_id)` — composite key. A given product appears at most once per order (with `quantity >= 1`).
+
+**Indexes:**
+
+| Index | Column(s) | Why |
+|---|---|---|
+| (PK auto-index) | `(order_id, product_id)` | PostgreSQL creates this automatically for the composite PK |
+| `idx_order_items_product_id` | `product_id` | FK to products — needed for category-based queries (Q3.2 basket composition) |
+
+**Sample rows (one order with 2 different products):**
+
+```
+order_id | product_id | quantity | unit_price | unit_cost | created_at
+1024     | 5          | 1        | 289.00     | 95.00     | 2024-03-15 14:30:01
+1024     | 12         | 2        | 145.00     | 52.00     | 2024-03-15 14:30:01
+```
+
+Order #1024 contains: 1× SKU 5 (sygnet) at PLN 289 each + 2× SKU 12 (bransoletka) at PLN 145 each. Total line value: 289 + (2 × 145) = PLN 579 (consistent with `orders.total_amount` minus shipping).
+
+**Design decisions:**
+
+- **Composite PK `(order_id, product_id)`** — natural key reflecting business rule: a product appears at most once per order (multiple units handled via `quantity`). No need for surrogate `id`.
+- **Snapshotted `unit_price` and `unit_cost`** — same pattern as `orders.shipping_city`. Catalog prices in `products` can change over time; historical orders must preserve the price actually charged. Margin calculations always use these columns, never `products.selling_price_pln`.
+- **No `discount_pln` or `discount_pct` column** — scope-appropriate. Analytical questions Q1–Q4 do not require discount-level analysis. Any discount logic is implicit in the snapshotted `unit_price` (i.e., `unit_price` is the actual price paid, post-discount).
+- **Index on `product_id`** — PostgreSQL indexes the composite PK starting with `order_id`, which is efficient for `WHERE order_id = X` queries. But for `WHERE product_id = X` (Q3.2 — "which orders contain this product?"), we need a separate index on `product_id`.
+
+---
