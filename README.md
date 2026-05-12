@@ -1,16 +1,16 @@
-# Marketing Attribution Analysis — PLSygnet.pl
+# Marketing Attribution Analysis - PLSygnet.pl
 
 > A case study analyzing the effectiveness of marketing channels for a fictional Polish e-commerce company in the men's jewelry segment.
 
-🚧 **Status:** Phase 1 — Data Generation & ETL (in progress)
+🚧 **Status:** Phase 1 - Data Generation & ETL (in progress)
 
 ---
 
 ## Overview
 
-End-to-end marketing analytics pipeline for **PLSygnet.pl**, a fictional Polish e-commerce company in the men's jewelry market. The Marketing Manager has 8 weeks to deliver a budget reallocation proposal to the board — this project answers the analytical questions behind that decision.
+End-to-end marketing analytics pipeline for **PLSygnet.pl**, a fictional Polish e-commerce company in the men's jewelry market. The Marketing Manager has 8 weeks to deliver a budget reallocation proposal to the board - this project answers the analytical questions behind that decision.
 
-**Business problem:** PLN 1.26M annual marketing budget across 6 channels (Google Ads, Meta Ads, TikTok Ads, influencer marketing, email, outdoor) — but no consolidated view of which channels deliver real returns.
+**Business problem:** PLN 1.26M annual marketing budget across 6 channels (Google Ads, Meta Ads, TikTok Ads, influencer marketing, email, outdoor) - but no consolidated view of which channels deliver real returns.
 
 **Approach:** synthetic data generation → PostgreSQL → SQL analysis (last-click vs. first-click vs. linear attribution) → Python visualization → business report.
 
@@ -55,17 +55,17 @@ pip install -r requirements.txt
 
 ## Roadmap
 
-- [x] **Phase 0** — Project brief, repo setup, environment
-- [ ] **Phase 1** — Synthetic data generation & PostgreSQL ETL
-- [ ] **Phase 2** — SQL analysis (8 analytical questions)
-- [ ] **Phase 3** — Visualization & exploratory analysis
-- [ ] **Phase 4** — Final business report
-- [ ] **Phase 5** — Documentation & polish
+- [x] **Phase 0** - Project brief, repo setup, environment
+- [ ] **Phase 1** - Synthetic data generation & PostgreSQL ETL
+- [ ] **Phase 2** - SQL analysis (8 analytical questions)
+- [ ] **Phase 3** - Visualization & exploratory analysis
+- [ ] **Phase 4** - Final business report
+- [ ] **Phase 5** - Documentation & polish
 
 ## Author
 
-**Maksym Wieczorek** — Master's student in Economic Data Analytics, UEP Poznań
+**Maksym Wieczorek** - Master's student in Economic Data Analytics, UEP Poznań
 
 ---
 
-*This is a portfolio project — all data is synthetically generated for educational purposes.*
+*This is a portfolio project - all data is synthetically generated for educational purposes.*
