@@ -284,3 +284,67 @@ id    | date       | channel       | campaign            | spend_pln | created_a
 - **Composite index `(date, channel)`** — anticipates the most common query pattern: `WHERE date BETWEEN ... AND channel = 'google_ads'`. PostgreSQL uses this composite efficiently for both columns when in this order.
 
 ---
+## Table: `marketing_touchpoints`
+
+**Purpose:** Captures every customer interaction with PLSygnet's marketing — clicks, impressions, page views, email opens, promo code redemptions. This is the **core attribution table**: it enables comparing different attribution models (first-touch, last-touch, linear) by reconstructing the full customer journey across all 6 channels.
+
+**Granularity:** 1 row = 1 interaction by 1 customer with 1 channel at 1 moment in time.
+
+**Analytical questions served:**
+
+- **Q1.2** — promo code redemption (filter `touchpoint_type = 'promo_code_redemption'`, link to orders via `order_id`)
+- **Q2.1** — influencer ROAS (engagement → conversion linked through customer journey)
+- **Q2.2** — engagement rate per influencer (count of impressions vs. clicks vs. conversions)
+- **Q3.1, Q3.2** — channel attribution (which channels touched the customer before purchase — input for first/last/linear attribution models)
+- **Q4.1** — TikTok and Meta video benchmark (touchpoint volume and conversion rate per channel)
+
+**Columns:**
+
+| Column | Type | Constraint | Why |
+|---|---|---|---|
+| `id` | `BIGSERIAL` | `PRIMARY KEY` | Unique touchpoint identifier (BIGSERIAL because this table grows large — ~500k+ rows expected) |
+| `customer_id` | `INT` | `NOT NULL REFERENCES customers(id)` | FK to customer (no anonymous touchpoints in this scope) |
+| `timestamp` | `TIMESTAMP` | `NOT NULL` | Exact moment of interaction (date + time) — critical for customer journey ordering |
+| `channel` | `VARCHAR(50)` | `NOT NULL`, `CHECK (channel IN ('google_ads', 'meta_ads', 'tiktok_ads', 'influencer_ig', 'email', 'outdoor'))` | One of 6 marketing channels |
+| `campaign` | `VARCHAR(100)` | `NOT NULL` | Campaign within the channel (must match a value in `marketing_spend.campaign`) |
+| `touchpoint_type` | `VARCHAR(50)` | `NOT NULL`, `CHECK (touchpoint_type IN ('impression', 'click', 'page_view', 'email_open', 'email_click', 'promo_code_redemption'))` | Type of interaction |
+| `order_id` | `INT` | `NULL REFERENCES orders(id)` | Linked order if this touchpoint resulted in a purchase (e.g., promo_code_redemption); NULL otherwise |
+| `created_at` | `TIMESTAMP` | `NOT NULL DEFAULT NOW()` | Audit log |
+
+**Indexes (in addition to PK):**
+
+| Index | Column(s) | Why |
+|---|---|---|
+| `idx_touchpoints_customer_id` | `customer_id` | Customer journey reconstruction (group by customer, order by timestamp) |
+| `idx_touchpoints_timestamp` | `timestamp` | Time-based filtering and window functions |
+| `idx_touchpoints_channel` | `channel` | Channel-level aggregations |
+| `idx_touchpoints_customer_timestamp` | `(customer_id, timestamp)` | Composite — accelerates the most common attribution query pattern |
+| `idx_touchpoints_order_id` | `order_id` WHERE `order_id IS NOT NULL` | Partial index — links touchpoints to converted orders |
+
+**Sample rows (one customer journey):**
+
+```
+id      | customer_id | timestamp           | channel       | campaign            | touchpoint_type        | order_id
+50001   | 42          | 2024-03-01 18:23:11 | meta_ads      | brand_awareness     | impression             | NULL
+50002   | 42          | 2024-03-01 18:23:14 | meta_ads      | brand_awareness     | click                  | NULL
+50003   | 42          | 2024-03-01 18:23:18 | meta_ads      | brand_awareness     | page_view              | NULL
+50004   | 42          | 2024-03-05 09:12:00 | email         | newsletter_q1       | email_open             | NULL
+50005   | 42          | 2024-03-05 09:12:35 | email         | newsletter_q1       | email_click            | NULL
+50006   | 42          | 2024-03-08 14:28:51 | google_ads    | brand_search        | click                  | NULL
+50007   | 42          | 2024-03-08 14:30:00 | google_ads    | brand_search        | page_view              | NULL
+50008   | 42          | 2024-03-08 14:42:18 | outdoor       | warsaw_billboard    | promo_code_redemption  | 1024
+```
+
+Marek's journey: Meta brand awareness ad → 4 days later email → 3 days later Google search click → page view → conversion using billboard promo code (WAW20). **6 touchpoints, 4 channels involved before purchase.** This is the data that powers attribution model comparison.
+
+**Design decisions:**
+
+- **`BIGSERIAL` instead of `SERIAL` for `id`** — touchpoints table grows large (50-200× more rows than orders). `SERIAL` (INT) maxes at ~2.1 billion; `BIGSERIAL` (BIGINT) goes to ~9 quintillion. Future-proofing.
+- **`customer_id` NOT NULL** — no anonymous touchpoints. Scope decision: tracking anonymous browsing (via session_id) adds complexity without analytical value for our 8 questions.
+- **`order_id` nullable** — most touchpoints don't convert directly. Only `promo_code_redemption` and certain conversion-type touchpoints have an `order_id`. NULL is the default state.
+- **No `first_touch` / `last_touch` flag columns** — these are **derived** via SQL window functions (`ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY timestamp)`), not stored. Storing them would violate the principle of separating raw data from analytical derivatives.
+- **Composite index `(customer_id, timestamp)`** — the most common query is "give me all touchpoints for customer X, ordered by time" (customer journey reconstruction). This composite serves it efficiently.
+- **Partial index on `order_id`** — most rows have `NULL`; indexing only non-NULL values speeds up conversion attribution queries without bloating the index.
+- **`campaign` as VARCHAR, not FK to `marketing_spend.campaign`** — VARCHAR is simpler. Cross-table consistency relies on data generation logic ensuring the same campaign names appear in both tables.
+
+---
