@@ -231,3 +231,56 @@ Order #1024 contains: 1× SKU 5 (sygnet) at PLN 289 each + 2× SKU 12 (bransolet
 - **Index on `product_id`** — PostgreSQL indexes the composite PK starting with `order_id`, which is efficient for `WHERE order_id = X` queries. But for `WHERE product_id = X` (Q3.2 — "which orders contain this product?"), we need a separate index on `product_id`.
 
 ---
+## Table: `marketing_spend`
+
+**Purpose:** Daily marketing expenditure per channel and campaign. Time-series table tracking how much PLSygnet spent, where, and on which campaign — across all 6 channels. Used as the denominator in every ROAS calculation.
+
+**Granularity:** 1 row = 1 day × 1 channel × 1 campaign.
+
+**Analytical questions served:**
+
+- **Q1.2** — outdoor revenue attribution (revenue from promo code / outdoor spend)
+- **Q2.1** — influencer ROAS (revenue per influencer / spend per influencer)
+- **Q3.1** — channel-level ROAS calculations
+- **Q4.1** — historical ROAS of paid video channels (TikTok, Meta video) as benchmark for YouTube
+
+**Columns:**
+
+| Column | Type | Constraint | Why |
+|---|---|---|---|
+| `id` | `SERIAL` | `PRIMARY KEY` | Unique row identifier |
+| `date` | `DATE` | `NOT NULL` | The day this spend is attributed to (daily granularity) |
+| `channel` | `VARCHAR(50)` | `NOT NULL`, `CHECK (channel IN ('google_ads', 'meta_ads', 'tiktok_ads', 'influencer_ig', 'email', 'outdoor'))` | One of 6 marketing channels |
+| `campaign` | `VARCHAR(100)` | `NOT NULL` | Campaign name within the channel (e.g., `'spring_sale_2024'`, `'macro_jan_kowal'`) |
+| `spend_pln` | `NUMERIC(10, 2)` | `NOT NULL`, `CHECK (spend_pln >= 0)` | Amount spent on this campaign on this day (accrual basis) |
+| `created_at` | `TIMESTAMP` | `NOT NULL DEFAULT NOW()` | Audit log |
+
+**Indexes (in addition to PK):**
+
+| Index | Column(s) | Why |
+|---|---|---|
+| `idx_marketing_spend_date` | `date` | Frequent time-range filtering (e.g., "spend in Q1 2024") |
+| `idx_marketing_spend_channel` | `channel` | Frequent channel-level aggregations (ROAS per channel) |
+| `idx_marketing_spend_date_channel` | `(date, channel)` | Composite index for queries combining time range + channel (most common pattern) |
+
+**Sample rows:**
+
+```
+id    | date       | channel       | campaign            | spend_pln | created_at
+1001  | 2024-03-15 | google_ads    | spring_sale_2024    | 450.00    | 2026-05-12 ...
+1002  | 2024-03-15 | meta_ads      | brand_awareness     | 320.00    | 2026-05-12 ...
+1003  | 2024-03-15 | tiktok_ads    | gen_z_targeting     | 180.00    | 2026-05-12 ...
+1004  | 2024-03-15 | influencer_ig | macro_jan_kowal     | 109.59    | 2026-05-12 ...
+1005  | 2024-03-15 | outdoor       | warsaw_billboard    | 657.53    | 2026-05-12 ...
+1006  | 2024-03-15 | email         | newsletter_q1       | 25.00     | 2026-05-12 ...
+```
+
+**Design decisions:**
+
+- **Accrual basis for annual contracts** — outdoor (PLN 240,000 / 365 = PLN 657.53/day) and macro-influencer (PLN 40,000 / 365 = PLN 109.59/day) are spread evenly across the contract period. This is the **industry standard for marketing analytics**, not cash accounting. Reason: ROAS measures "value generated per złoty invested" — and billboard generated value for 365 days, not just on the payment day. Cash-basis accounting (lump-sum entry on payment day) is left to the finance/accounting team.
+- **Campaign granularity, not just channel** — allows drill-down into "which Google Ads campaign performed best" (Q2.1, Q3.1). Adds complexity (~20-30k rows vs ~11k for channel-only) but pays off in analytical depth.
+- **No `impressions`, `clicks`, or `conversions` columns** — these are **behavioral metrics** belonging to `marketing_touchpoints` table. Separation of concerns: `marketing_spend` answers "how much did we pay", `marketing_touchpoints` answers "what did customers do".
+- **No FK to a `campaigns` table** — `campaign` is a VARCHAR. A separate `campaigns` table would be more normalized but adds complexity without analytical value. Out of scope.
+- **Composite index `(date, channel)`** — anticipates the most common query pattern: `WHERE date BETWEEN ... AND channel = 'google_ads'`. PostgreSQL uses this composite efficiently for both columns when in this order.
+
+---
