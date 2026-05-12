@@ -133,3 +133,52 @@ created_at: 2026-05-11 23:55:00
 - **Partial index on `promo_code`** — `CREATE INDEX ... WHERE promo_code IS NOT NULL`. Most orders have no promo code; indexing only the meaningful subset.
 
 ---
+## Table: `products`
+
+**Purpose:** Product catalog — one row per SKU. Dimensional table (small, stable).
+
+**Analytical questions served:**
+
+- **Q3.1** — gross profit per channel (cost and price reference)
+- **Q3.2** — basket composition (% of revenue by product category)
+
+**Columns:**
+
+| Column | Type | Constraint | Why |
+|---|---|---|---|
+| `id` | `SERIAL` | `PRIMARY KEY` | Unique product identifier |
+| `sku` | `VARCHAR(20)` | `UNIQUE NOT NULL` | Business-readable identifier (e.g., `'SIG-001'`) |
+| `name` | `VARCHAR(200)` | `NOT NULL` | Product name (e.g., `'Sygnet srebrny klasyczny'`) |
+| `category` | `VARCHAR(50)` | `NOT NULL`, `CHECK (category IN ('signet_rings', 'bracelets', 'necklaces', 'rings', 'watches', 'earrings', 'suit_accessories'))` | One of 7 categories |
+| `selling_price_pln` | `NUMERIC(10, 2)` | `NOT NULL`, `CHECK (selling_price_pln > 0)` | Current catalog price (for reference; historical price snapshotted in `order_items.unit_price`) |
+| `cost_price_pln` | `NUMERIC(10, 2)` | `NOT NULL`, `CHECK (cost_price_pln > 0)` | Current cost (for reference; historical cost snapshotted in `order_items.unit_cost`) |
+| `is_active` | `BOOLEAN` | `NOT NULL DEFAULT TRUE` | TRUE = currently sold; FALSE = discontinued (kept for FK integrity with historical `order_items`) |
+| `created_at` | `TIMESTAMP` | `NOT NULL DEFAULT NOW()` | Audit log |
+
+**Indexes (in addition to PK):**
+
+| Index | Column(s) | Why |
+|---|---|---|
+| `idx_products_category` | `category` | Frequent grouping by category in Q3.2 basket composition |
+
+**Sample row:**
+
+```
+id: 5
+sku: SIG-001
+name: Sygnet srebrny klasyczny męski
+category: signet_rings
+selling_price_pln: 289.00
+cost_price_pln: 95.00
+is_active: TRUE
+created_at: 2024-01-15 10:30:00
+```
+
+**Design decisions:**
+
+- **`sku` separate from `id`** — `id` is technical (DB internal), `sku` is business-readable for reports and conversations ("SIG-001 sold 12 times" vs "product 1234 sold 12 times").
+- **`category` as VARCHAR + CHECK** — not a separate `categories` table. 7 values are fixed; separate table would force JOINs in every analysis without benefit.
+- **`selling_price_pln` and `cost_price_pln` are catalog references only** — historical prices/costs are snapshotted in `order_items.unit_price` and `order_items.unit_cost`. Margin calculations use `order_items`, never `products`.
+- **`is_active` flag instead of DELETE** — discontinued products stay in `products` to preserve FK integrity with historical `order_items`. Soft delete pattern.
+
+---
