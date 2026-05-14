@@ -182,6 +182,9 @@ created_at: 2024-01-15 10:30:00
 - **`is_active` flag instead of DELETE** — discontinued products stay in `products` to preserve FK integrity with historical `order_items`. Soft delete pattern.
 
 ---
+
+- **`total_amount` is an independent metric, not a literal SUM of `order_items`** — in real e-commerce, the final order amount reflects basket-level discounts, promo codes, rounding, and shipping adjustments that don't always reconcile with the line-level sum. ROAS and revenue analyses use `orders.total_amount`; `order_items` serves basket composition and gross-profit-per-category analyses.
+
 ## Table: `order_items`
 
 **Purpose:** Order line items — one row per product per order. Splits the "what was purchased" from the order header (`orders`).
