@@ -241,7 +241,10 @@ def generate_marketing_touchpoints() -> pd.DataFrame:
     
     df = pd.DataFrame(all_touchpoints)
     df = df.sort_values("timestamp").reset_index(drop=True)
-    
+
+    # Convert order_id from float (NaN-compatible) to nullable Int64
+    df["order_id"] = df["order_id"].astype("Int64")
+
     return df
 
 
