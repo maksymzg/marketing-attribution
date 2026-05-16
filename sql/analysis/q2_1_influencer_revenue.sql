@@ -1,0 +1,12 @@
+-- =========================================================================
+-- Q2.1: Influencer-specific revenue (step 1: revenue only, no ROAS yet)
+-- =========================================================================
+-- Question: Which of 3 influencers generates the most revenue?
+--           (Step 1 — revenue only. Step 2 — add spend & compute ROAS.)
+--
+-- Approach:
+--   1. Filter orders by influencer promo codes
+--   2. Group by promo code
+--   3. Count orders + sum revenue per influencer
+-- =========================================================================
+
