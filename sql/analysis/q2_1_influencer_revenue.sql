@@ -10,3 +10,8 @@
 --   3. Count orders + sum revenue per influencer
 -- =========================================================================
 
+SELECT o.promo_code, COUNT(*) AS num_orders, ROUND(SUM(o.total_amount), 2) AS revenue_pln
+FROM orders o
+WHERE o.promo_code IN ('PAWEL10', 'ZOFIA10', 'JANKOWAL15')
+GROUP BY o.promo_code
+ORDER BY revenue_pln DESC;
